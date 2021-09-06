@@ -3,7 +3,8 @@
 namespace App\Services;
 
 use App\Helpers\CurlHelper;
-use App\Models\Customer;
+use App\Entities\Customer;
+use Doctrine\ORM\EntityManagerInterface;
 
 /**
  * Data Importer Service.
@@ -19,14 +20,18 @@ class DataImporterService
      * Props
      */
     private $curl;
+    private $entityManager;
 
     /**
      * Constructor
      * @param CurlHelper $curl
      */
-    public function __construct(CurlHelper $curl)
-    {
+    public function __construct(
+        CurlHelper $curl,
+        EntityManagerInterface $entityManager
+    ){
         $this->curl = $curl;
+        $this->entityManager = $entityManager;
     }//end __construct()
 
     /**
@@ -41,32 +46,48 @@ class DataImporterService
         if (! empty($response)) {
 
             // get results
-            $customer = $response['results'][0];
-            $email = $customer['email'];
+            $data = $response['results'][0];
+            $email = $data['email'];
 
             // check if email already exists in the database
-            $isCustomerExists = Customer::where('email', $email)->get();
+            $isCustomerExists = $this->entityManager
+               ->getRepository(Customer::class)
+               ->findOneBy([
+                   'email' => $email
+               ]);
 
-            // prepare data
-            $data = [
-                'firstname' => $customer['name']['first'],
-                'lastname' => $customer['name']['last'],
-                'email' => $email,
-                'username' => $customer['login']['username'],
-                'country' => $customer['location']['country'],
-                'gender' => $customer['gender'],
-                'city' => $customer['location']['city'],
-                'phone' => $customer['phone'],
-                'passwd' => $customer['login']['md5']
-            ];
+            // update if customer exists
+            if (! empty($isCustomerExists)) {
+                $isCustomerExists->setFirstName($data['name']['first']);
+                $isCustomerExists->setLastName($data['name']['last']);
+                $isCustomerExists->setUsername($data['login']['username']);
+                $isCustomerExists->setCountry($data['location']['country']);
+                $isCustomerExists->setGender($data['gender']);
+                $isCustomerExists->setCity($data['location']['city']);
+                $isCustomerExists->setPhone($data['phone']);
+                $isCustomerExists->setPassword($data['login']['md5']);
 
-            // insert if new customer
-            if ($isCustomerExists->isEmpty()) {
-                return Customer::create($data);
+                $this->entityManager->flush();
+
+                return response()->json(['statusMessage' => 'Successfully updated!'], 201);
             }
 
-            // update if existing customer
-            return Customer::where('email', $email)->update($data);
+            // insert new
+            $customer = new Customer();
+            $customer->setFirstName($data['name']['first']);
+            $customer->setLastName($data['name']['last']);
+            $customer->setEmail($data['email']);
+            $customer->setUsername($data['login']['username']);
+            $customer->setCountry($data['location']['country']);
+            $customer->setGender($data['gender']);
+            $customer->setCity($data['location']['city']);
+            $customer->setPhone($data['phone']);
+            $customer->setPassword($data['login']['md5']);
+
+            $this->entityManager->persist($customer);
+            $this->entityManager->flush();
+
+            return response()->json(['statusMessage' => 'Successfully inserted!'], 201);
         }
 
         return 'Error retrieving data from the provider.';

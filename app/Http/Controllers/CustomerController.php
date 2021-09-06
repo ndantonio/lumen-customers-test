@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-// use Illuminate\Support\Facades\DB;
-use App\Models\Customer;
+use App\Entities\Customer;
 use App\Services\DataImporterService;
+use Doctrine\ORM\EntityManagerInterface;
 
 
 /**
@@ -16,14 +16,18 @@ class CustomerController extends Controller
      * Props
      */
     private $service;
+    private $entityManager;
 
     /**
      * Constructor
      * @param DataImporterService $service
      */
-    public function __construct(DataImporterService $service)
-    {
+    public function __construct(
+        DataImporterService $service,
+        EntityManagerInterface $entityManager
+    ){
         $this->service = $service;
+        $this->entityManager = $entityManager;
     }//end __consturct()
 
     /**
@@ -32,23 +36,22 @@ class CustomerController extends Controller
      */
     public function showAllCustomers()
     {
-        /*$customers = DB::select("
-            SELECT 
-                CONCAT(firstname, ' ', lastname) as fullname,
-                email,
-                country
-            FROM customers
-        ");*/
+        $data = [];
 
-        $customers = Customer::select([
-            'firstname',
-            'lastname',
-            'email',
-            'country'
-        ])->get();
+        $customers = $this->entityManager
+           ->getRepository(Customer::class)
+           ->findAll();
 
-        if (! $customer->isEmpty()) {
-            return response()->json($customers);
+       foreach ($customers as $customer) {
+            $temp['fullname'] = $customer->getFirstName() . " " . $customer->getLastName();
+            $temp['email'] = $customer->getEmail();
+            $temp['country'] = $customer->getCountry();
+
+            $data[] = $temp;
+       }
+
+        if ($customers) {
+            return response()->json($data);
         }
 
         return 'No record(s) found.';
@@ -59,36 +62,24 @@ class CustomerController extends Controller
      * @param int $id Customer ID
      * @return json
      */
-    public function showCustomerDetailsById($id)
+    public function showCustomerDetailsById(int $id)
     {
-        /*$customer = DB::select("
-            SELECT 
-                CONCAT(firstname, ' ', lastname) as fullname,
-                email,
-                username,
-                gender,
-                country,
-                city,
-                phone
-            FROM 
-                customers
-            WHERE 
-                id = :id
-        ", ['id' => $id]);*/
+        $customer = $this->entityManager
+           ->getRepository(Customer::class)
+           ->findOneBy([
+               'id' => $id
+           ]);
 
-        $customer = Customer::select([
-            'firstname',
-            'lastname',
-            'email',
-            'username',
-            'gender',
-            'country',
-            'city',
-            'phone'
-        ])->where('id', $id)->get();
-
-        if (! $customer->isEmpty()) {
-            return response()->json($customer);
+        if ($customer) {
+            return response()->json([
+                'fullname' => $customer->getFirstName() . " " . $customer->getLastName(),
+                'email' => $customer->getEmail(),
+                'username' => $customer->getUsername(),
+                'gender' => $customer->getGender(),
+                'country' => $customer->getCountry(),
+                'city' => $customer->getCity(),
+                'phone' => $customer->getPhone()
+            ]);
         }
 
         return 'No record(s) found.';

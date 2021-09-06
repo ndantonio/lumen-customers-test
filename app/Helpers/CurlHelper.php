@@ -30,7 +30,7 @@ class CurlHelper
      * @param string $url API URL
      * @return array | mixed
      */
-    public function call($method, $url)
+    public function call(string $method, string $url)
     {
         try {
             $result = $this->client->request($method, $url);
